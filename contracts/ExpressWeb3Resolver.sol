@@ -1,4 +1,5 @@
-pragma v0.8.7;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.7;
 
 import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
 
@@ -19,19 +20,28 @@ contract ExpressWeb3Resolver is ChainlinkClient {
 
     function resolve(bytes calldata ipfsHash) public returns (bytes32 requestId){
         bytes memory url = "localhost:5001/api/v0/cat?arg="; 
-        Chainlink.request memory request = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
-        request.add("get", url + ipfsHash);
-        bytes32 requestId = sendChainlinkRequestTo(oracle, request, fee);
-        hashmap[requestId] = ipfsHash;
+        Chainlink.Request memory request = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
+        request.add("get", string(abi.encodePacked(url, ipfsHash)));
+        requestId = sendChainlinkRequestTo(oracle, request, fee);
+        hashmap[requestId] = string(ipfsHash);
         return requestId;
     }
 
-    function fullfill(uint calldata request_id, string calldata _md5hash) public recordChainlinkFulfillment(_requestId) {
+    function resolve(bytes calldata ipfsHash, bytes calldata ipfsNodeUrl) public returns (bytes32 requestId){
+        bytes memory url = abi.encodePacked(ipfsNodeUrl ,"/api/v0/cat?arg="); 
+        Chainlink.Request memory request = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
+        request.add("get", string(abi.encodePacked(url, ipfsHash)));
+        requestId = sendChainlinkRequestTo(oracle, request, fee);
+        hashmap[requestId] = string(ipfsHash);
+        return requestId;
+    }
+
+    function fulfill(bytes32 request_id, string calldata _md5hash) public recordChainlinkFulfillment(request_id) {
         hashmap[request_id] = _md5hash;
     }
 
-    function resolveCallback(string calldata request_id, string calldata md5) public returns (bool verified){
+    function resolveCallback(bytes32 request_id, string calldata md5) public view returns (bool verified){
         // should add check to see if the request is completed/pending/errored out
-        return hashmap[request_id] == md5;
+        return keccak256(bytes(hashmap[request_id])) == keccak256(bytes(md5));
     }
 }
